@@ -4,3 +4,9 @@ __pycache__/
 .ruff_cache/
 *.pyc
 .env
+.cache/
+report.xml
+gitleaks.json
+semgrep.json
+sbom.cdx.json
+image-digest.txt

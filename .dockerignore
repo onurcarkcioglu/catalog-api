@@ -1,0 +1,6 @@
+.git
+.venv
+.cache
+tests
+*.json
+report.xml
