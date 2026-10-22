@@ -71,8 +71,11 @@ secret-scan:
     entrypoint: [""]
   variables:
     GIT_DEPTH: "0"
+    # Temiz klon: runner'da onceki islerden kalan referanslar taramaya karismasin.
+    GIT_STRATEGY: clone
   script:
-    - gitleaks git --redact --verbose --report-format json --report-path gitleaks.json .
+    # Sadece bu commit'ten erisilebilen gecmis taranir (--all yerine).
+    - gitleaks git --log-opts="$CI_COMMIT_SHA" --redact --verbose --report-format json --report-path gitleaks.json .
   artifacts:
     when: always
     paths: [gitleaks.json]
