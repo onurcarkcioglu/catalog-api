@@ -45,6 +45,9 @@ default:
 lint:
   stage: test
   extends: .python
+  # Sadece ruff kurulur: bagimlilik cakismasi guvenlik lint'ini korlestiremez.
+  before_script:
+    - pip install -q "$(grep -i '^ruff==' requirements-dev.txt)"
   script:
     - ruff check .
     - ruff format --check .
