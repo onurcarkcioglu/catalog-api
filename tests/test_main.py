@@ -1,0 +1,50 @@
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+client = TestClient(app)
+
+
+def test_healthz():
+    r = client.get("/healthz")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+
+
+def test_list_titles():
+    r = client.get("/v1/titles")
+    assert r.status_code == 200
+    assert len(r.json()) == 3
+
+
+def test_filter_by_kind():
+    r = client.get("/v1/titles", params={"kind": "movie"})
+    assert [t["id"] for t in r.json()] == [2]
+
+
+def test_invalid_kind_rejected():
+    # Girdi dogrulama: beklenmeyen deger 422 ile reddedilmeli.
+    r = client.get("/v1/titles", params={"kind": "<script>alert(1)</script>"})
+    assert r.status_code == 422
+
+
+def test_get_title_found():
+    r = client.get("/v1/titles/1")
+    assert r.status_code == 200
+    assert r.json()["name"] == "Bosphorus Nights"
+
+
+def test_get_title_not_found():
+    assert client.get("/v1/titles/999").status_code == 404
+
+
+def test_docs_disabled():
+    assert client.get("/docs").status_code == 404
+    assert client.get("/openapi.json").status_code == 200
+
+
+def test_metrics_exposed():
+    client.get("/v1/titles/1")
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    assert "catalog_title_lookups_total" in r.text
