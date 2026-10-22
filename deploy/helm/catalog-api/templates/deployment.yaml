@@ -43,6 +43,11 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 15
           resources: {{- toYaml .Values.resources | nindent 12 }}
+          # Vault -> External Secrets -> bu Secret (optional: ESO hazir degilse pod yine baslar)
+          envFrom:
+            - secretRef:
+                name: catalog-config
+                optional: true
           volumeMounts:
             - name: tmp
               mountPath: /tmp

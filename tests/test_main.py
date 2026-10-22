@@ -55,3 +55,17 @@ def test_security_headers():
     assert r.headers["x-content-type-options"] == "nosniff"
     assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
     assert "max-age=" in r.headers["strict-transport-security"]
+
+
+def test_admin_requires_key(monkeypatch):
+    monkeypatch.setenv("CATALOG_API_KEY", "unit-test-only")
+    assert client.get("/v1/admin/stats").status_code == 401
+    assert client.get("/v1/admin/stats", headers={"X-API-Key": "wrong"}).status_code == 401
+    r = client.get("/v1/admin/stats", headers={"X-API-Key": "unit-test-only"})
+    assert r.status_code == 200
+    assert r.json() == {"titles": 3}
+
+
+def test_admin_disabled_without_key(monkeypatch):
+    monkeypatch.delenv("CATALOG_API_KEY", raising=False)
+    assert client.get("/v1/admin/stats").status_code == 503

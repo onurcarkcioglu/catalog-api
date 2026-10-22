@@ -1,8 +1,10 @@
 """SecureStream Catalog API: OTT platformunun icerik katalogu servisi."""
 
+import os
+import secrets
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from pydantic import BaseModel
 
@@ -78,3 +80,14 @@ def get_title(title_id: int) -> Title:
         raise HTTPException(status_code=404, detail="title not found")
     TITLE_LOOKUPS.labels(result="found").inc()
     return title
+
+
+@app.get("/v1/admin/stats")
+def admin_stats(x_api_key: Annotated[str | None, Header()] = None) -> dict[str, int]:
+    # Anahtar Vault'tan External Secrets ile gelir; kodda ya da imajda yok.
+    expected = os.environ.get("CATALOG_API_KEY")
+    if not expected:
+        raise HTTPException(status_code=503, detail="admin disabled")
+    if x_api_key is None or not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return {"titles": len(_CATALOG)}

@@ -77,6 +77,9 @@ Stages 3–5 run in parallel (`needs: []`) so security feedback does not wait fo
 - Strict input validation (`kind` is an allow-list; a `<script>` payload returns 422, covered by a test).
 - Security headers on every response (CSP, HSTS, `X-Content-Type-Options`, CORP, …) and no
   `Server` header — added after ZAP reported them, and locked in by a unit test.
+- `/v1/admin/stats` is protected by an API key that exists only in HashiCorp Vault. External
+  Secrets Operator logs in to Vault with a short-lived, audience-bound Kubernetes token (no static
+  credential), and the key is compared with `secrets.compare_digest`.
 
 ## Evidence: the gates were tested by breaking them
 
