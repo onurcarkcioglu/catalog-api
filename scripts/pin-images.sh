@@ -8,6 +8,7 @@ declare -A IMAGES=(
   [__SEMGREP__]="semgrep/semgrep:1.180.0"
   [__TRIVY__]="aquasec/trivy:0.76.0"
   [__KANIKO__]="martizih/kaniko:v1.28.6-debug"
+  [__COSIGN__]="ghcr.io/sigstore/cosign/cosign:v2.6.5-dev"
 )
 for key in "${!IMAGES[@]}"; do
   ref="${IMAGES[$key]}"

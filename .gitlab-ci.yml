@@ -8,7 +8,7 @@ workflow:
       when: never
     - if: $CI_COMMIT_BRANCH
 
-stages: [test, scan, build, image-scan]
+stages: [test, scan, build, image-scan, sign]
 
 variables:
   PYTHON_IMAGE: "python:3.12-slim@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2"
@@ -16,6 +16,7 @@ variables:
   SEMGREP_IMAGE: "semgrep/semgrep:1.180.0@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3"
   TRIVY_IMAGE: "aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222"
   KANIKO_IMAGE: "martizih/kaniko:v1.28.6-debug@sha256:7ab44d0131c3051b6dea128067e258c7afb5c4815082a93b9cf6c624f2140bf0"
+  COSIGN_IMAGE: "ghcr.io/sigstore/cosign/cosign:v2.6.5-dev@sha256:76029a0246bcfde96caa72469a62a1094f6e0978dc3f537f5cafd4c5f6c6a417"
   IMAGE: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.cache/trivy"
@@ -137,3 +138,26 @@ image-scan:
     when: always
     paths: [sbom.cdx.json]
     expire_in: 90 days
+
+sign:
+  stage: sign
+  needs: [build, image-scan]
+  image:
+    name: $COSIGN_IMAGE
+    entrypoint: [""]
+  rules:
+    # Protected degiskenler yalnizca korumali dalda var: imzayi sadece main atar.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - |
+      cat /etc/ssl/certs/ca-certificates.crt "$CI_SERVER_TLS_CA_FILE" > /tmp/ca-bundle.pem
+      export SSL_CERT_FILE=/tmp/ca-bundle.pem
+      umask 077
+      echo "$COSIGN_PRIVATE_KEY_B64" | base64 -d > /tmp/cosign.key
+      IMAGE_REF="$CI_REGISTRY_IMAGE@$(cat image-digest.txt)"
+      cosign login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
+      cosign sign --yes --key /tmp/cosign.key --tlog-upload=false "$IMAGE_REF"
+      cosign attest --yes --key /tmp/cosign.key --tlog-upload=false --type cyclonedx --predicate sbom.cdx.json "$IMAGE_REF"
+      rm -f /tmp/cosign.key
+      cosign verify --key cosign.pub --insecure-ignore-tlog=true "$IMAGE_REF" > /dev/null && echo "Imza dogrulandi: $IMAGE_REF"
+      cosign verify-attestation --key cosign.pub --insecure-ignore-tlog=true --type cyclonedx "$IMAGE_REF" > /dev/null && echo "SBOM attestation dogrulandi"
