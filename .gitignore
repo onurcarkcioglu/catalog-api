@@ -10,3 +10,5 @@ gitleaks.json
 semgrep.json
 sbom.cdx.json
 image-digest.txt
+zap-report.html
+zap-report.json

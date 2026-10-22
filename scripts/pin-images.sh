@@ -10,6 +10,7 @@ declare -A IMAGES=(
   [__KANIKO__]="martizih/kaniko:v1.28.6-debug"
   [__COSIGN__]="ghcr.io/sigstore/cosign/cosign:v2.6.5-dev"
   [__HELM__]="alpine/helm:3.22.1"
+  [__ZAP__]="ghcr.io/zaproxy/zaproxy:stable"
 )
 for key in "${!IMAGES[@]}"; do
   ref="${IMAGES[$key]}"

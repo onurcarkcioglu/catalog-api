@@ -8,7 +8,7 @@ workflow:
       when: never
     - if: $CI_COMMIT_BRANCH
 
-stages: [test, scan, build, image-scan, sign, deploy]
+stages: [test, scan, build, image-scan, sign, deploy, dast]
 
 variables:
   PYTHON_IMAGE: "python:3.12-slim@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2"
@@ -18,6 +18,7 @@ variables:
   KANIKO_IMAGE: "martizih/kaniko:v1.28.6-debug@sha256:7ab44d0131c3051b6dea128067e258c7afb5c4815082a93b9cf6c624f2140bf0"
   COSIGN_IMAGE: "ghcr.io/sigstore/cosign/cosign:v2.6.5-dev@sha256:76029a0246bcfde96caa72469a62a1094f6e0978dc3f537f5cafd4c5f6c6a417"
   HELM_IMAGE: "alpine/helm:3.22.1@sha256:8191701ad1f82ee3695c87211fcbfe6d7b1bb7df92ac1c8de9ccdb0995a6a2c1"
+  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6"
   IMAGE: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.cache/trivy"
@@ -190,3 +191,25 @@ deploy:
         --set image.digest="$(cat image-digest.txt)" \
         --atomic --wait --timeout 5m
       helm status catalog-api -n catalog | head -6
+
+dast:
+  stage: dast
+  needs: [deploy]
+  image:
+    name: $ZAP_IMAGE
+    docker:
+      user: root
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  # 2 = yalnizca WARN (sari, durdurmaz). 1 = zap-rules.tsv'deki FAIL kurali tetiklendi (kirmizi).
+  allow_failure:
+    exit_codes: [2]
+  script:
+    - |
+      rm -rf /zap/wrk && ln -s "$CI_PROJECT_DIR" /zap/wrk
+      zap-api-scan.py -t https://catalog.securestream.lab/openapi.json -f openapi \
+        -c zap-rules.tsv -r zap-report.html -J zap-report.json
+  artifacts:
+    when: always
+    paths: [zap-report.html, zap-report.json]
+    expire_in: 30 days
