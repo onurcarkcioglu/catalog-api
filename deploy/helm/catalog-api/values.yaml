@@ -1,0 +1,20 @@
+replicaCount: 2
+image:
+  repository: registry.securestream.lab/securestream/catalog-api
+  digest: ""        # pipeline sha256:... verir; imaj her zaman digest ile deploy edilir
+  tag: latest       # yalnizca digest bossa (yerel lint/template)
+  pullPolicy: IfNotPresent
+imagePullSecrets:
+  - name: registry-pull
+service:
+  port: 80
+ingress:
+  enabled: true
+  className: traefik
+  host: catalog.securestream.lab
+  clusterIssuer: securestream-lab-ca
+networkPolicy:
+  ingressControllerNamespace: traefik
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { cpu: 500m, memory: 256Mi }
