@@ -48,3 +48,10 @@ def test_metrics_exposed():
     r = client.get("/metrics")
     assert r.status_code == 200
     assert "catalog_title_lookups_total" in r.text
+
+
+def test_security_headers():
+    r = client.get("/healthz")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
+    assert "max-age=" in r.headers["strict-transport-security"]

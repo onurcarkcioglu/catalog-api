@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from pydantic import BaseModel
 
@@ -28,6 +28,26 @@ TITLE_LOOKUPS = Counter("catalog_title_lookups", "Tekil icerik sorgulari", ["res
 
 # Swagger/ReDoc uretimde kapali: saldirgana API haritasi vermiyoruz.
 app = FastAPI(title="SecureStream Catalog API", version="0.1.0", docs_url=None, redoc_url=None)
+
+# Her yanita guvenlik basliklari (ZAP DAST bulgusu uzerine eklendi).
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Permissions-Policy": "geolocation=(), camera=(), microphone=()",
+}
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
 
 
 @app.get("/healthz")
