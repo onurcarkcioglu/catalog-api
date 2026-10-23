@@ -34,7 +34,7 @@ Quality Gate stops `sign` and `deploy`. `main` is also mirrored read-only to Git
 1. Never read or print secret values (CI variables, Vault data, kubeconfigs, tokens). The admin API key exists
    only in Vault; tests use a fake key via `monkeypatch`.
    kubectl reads the kubeconfig itself, so file deny rules do not cover it: never `kubectl get/describe secret`,
-   never `-o yaml` / `-o json`. Use `-o wide` or `-o jsonpath=` for the specific non-secret fields you need.
+   use `-o yaml` / `-o json` only as `claude-readonly` and print only the fields you need (env values are visible).
    kubectl only as `claude-readonly` (read-only RBAC, no secrets, no logs/exec; see `~/securestream/CLAUDE.md`):
    never the admin kubeconfig, `--kubeconfig`, `--context`, `--token` or `KUBECONFIG=`. Cluster changes are the human's.
 2. Never add `allow_failure`, `--exit-code 0`, `--insecure`, `privileged`, or rule exclusions to make a scan pass.
