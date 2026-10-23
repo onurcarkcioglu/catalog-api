@@ -35,6 +35,8 @@ Quality Gate stops `sign` and `deploy`. `main` is also mirrored read-only to Git
    only in Vault; tests use a fake key via `monkeypatch`.
    kubectl reads the kubeconfig itself, so file deny rules do not cover it: never `kubectl get/describe secret`,
    never `-o yaml` / `-o json`. Use `-o wide` or `-o jsonpath=` for the specific non-secret fields you need.
+   kubectl only as `claude-readonly` (read-only RBAC, no secrets, no logs/exec; see `~/securestream/CLAUDE.md`):
+   never the admin kubeconfig, `--kubeconfig`, `--context`, `--token` or `KUBECONFIG=`. Cluster changes are the human's.
 2. Never add `allow_failure`, `--exit-code 0`, `--insecure`, `privileged`, or rule exclusions to make a scan pass.
    A finding is fixed, or documented as an accepted risk with a reason — and the user decides that.
    Existing, deliberate exceptions — do not widen them or copy them to other jobs:
