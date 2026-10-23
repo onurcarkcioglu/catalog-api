@@ -10,7 +10,7 @@ workload for **[SecureStream](https://github.com/onurcarkcioglu/securestream-inf
 an end-to-end DevSecOps lab built on a single Proxmox server.
 
 The application is intentionally simple. **The point of this repository is the delivery
-chain around it:** every commit passes twelve pipeline jobs, the image is signed and carries
+chain around it:** every commit passes fourteen pipeline jobs, the image is signed and carries
 an SBOM attestation, and the Kubernetes cluster refuses to run anything the pipeline did not sign.
 
 > The source of truth is a self-hosted GitLab; this GitHub repository is a read-only mirror
@@ -33,6 +33,7 @@ flowchart LR
     G --> H[cosign sign<br/>+ SBOM attestation]
     H --> I[Helm deploy<br/>by digest]
     I --> J[OWASP ZAP<br/>DAST]
+    J -. all reports .-> R[(DefectDojo<br/>register + SLA)]
     I -. admission .-> K{Kyverno:<br/>signature valid?}
     K -- no --> X[Pod rejected]
     K -- yes --> L[Running pod<br/>watched by Falco]
@@ -44,6 +45,7 @@ flowchart LR
 | 2 | unit-test | pytest | broken behaviour, missing security headers, input validation |
 | 2a | hadolint | hadolint (SARIF + JSON) | any Dockerfile finding (default threshold) |
 | 2b | checkov-helm | Checkov (`helm`, `kubernetes`) + `scripts/scan-gate.py` | any chart finding without a valid exception in `security/exceptions.yaml` |
+| 2c | exceptions-check | `scripts/exceptions-check.py` | invalid schema, duplicate id, lifetime over 90 days, expired exception |
 | 3 | secret-scan | gitleaks | any secret in the commit history |
 | 4 | sast | Semgrep (`p/python`, `p/owasp-top-ten`) | blocking code findings |
 | 5 | sca | Trivy fs | HIGH/CRITICAL fixable CVEs, Dockerfile & Helm misconfig |
@@ -52,6 +54,7 @@ flowchart LR
 | 8 | sign | cosign | — signs the image and attests the SBOM (`main` only) |
 | 9 | deploy | Helm, image **by digest**, `--atomic` | failed rollout (auto-rollback) |
 | 10 | dast | OWASP ZAP API scan | XSS, SQLi, command/code injection (rules in `zap-rules.tsv`) |
+| 11 | defectdojo-upload | DefectDojo reimport (`scripts/defectdojo-upload.py`) | — register, not a gate: all reports of `main` (also after a red job), exceptions mirrored as Risk Acceptances; API errors fail the job |
 
 Stages 2a–5 run in parallel (`needs: []`) so security feedback does not wait for tests.
 
@@ -59,6 +62,7 @@ Stages 2a–5 run in parallel (`needs: []`) so security feedback does not wait f
 suppressions: each entry names the tool, rule, path, reason, owner and an expiry date (at most 90 days).
 Checkov runs in report mode and `scripts/scan-gate.py` decides: a finding passes only with a matching,
 unexpired exception, and a report with zero checks fails (a scanner that did not run never looks green).
+Triage, SLA and who decides on false positives: `docs/vulnerability-management.md` in the platform repository.
 
 ## Security controls in this repository
 
