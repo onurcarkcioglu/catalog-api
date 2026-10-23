@@ -1,0 +1,4 @@
+# helm lint / template / checkov icin ornek digest: chart digest olmadan render edilmez.
+# Gercek digest pipeline'da build isinden gelir.
+image:
+  digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"

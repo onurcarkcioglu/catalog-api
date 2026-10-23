@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Chart.Name }}
+  namespace: {{ .Release.Namespace }}
   labels: {{- include "catalog.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
@@ -43,15 +44,20 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 15
           resources: {{- toYaml .Values.resources | nindent 12 }}
-          # Vault -> External Secrets -> bu Secret (optional: ESO hazir degilse pod yine baslar)
-          envFrom:
-            - secretRef:
-                name: catalog-config
-                optional: true
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            # Vault -> External Secrets -> bu Secret; env yerine dosya (CKV_K8S_35), ESO yenilemesi pod'a yansir.
+            - name: catalog-config
+              mountPath: /run/secrets/catalog
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi
+        - name: catalog-config
+          secret:
+            secretName: catalog-config
+            # optional: ESO hazir degilse pod yine baslar, admin uc noktasi 503 doner.
+            optional: true
+            defaultMode: 0440

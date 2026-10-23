@@ -1,9 +1,9 @@
 replicaCount: 2
 image:
   repository: registry.securestream.lab/securestream/catalog-api
-  digest: ""        # pipeline sha256:... verir; imaj her zaman digest ile deploy edilir
-  tag: latest       # yalnizca digest bossa (yerel lint/template)
-  pullPolicy: IfNotPresent
+  digest: ""        # zorunlu: pipeline sha256:... verir; etiketle render edilmez (CKV_K8S_14/43)
+  # Always: digest degismez, ama her pod baslangicinda registry yetkisi yeniden dogrulanir (CKV_K8S_15).
+  pullPolicy: Always
 imagePullSecrets:
   - name: registry-pull
 service:
