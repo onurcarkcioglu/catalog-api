@@ -11,7 +11,7 @@ stages: [test, scan, build, image-scan, sign, deploy, dast, report]
 
 include:
   - project: securestream/ci-templates
-    ref: &ss_ci_ref v1.0.0-rc.2
+    ref: &ss_ci_ref v1.0.0
     file:
       - templates/secret-scan.yml
       - templates/sast.yml
