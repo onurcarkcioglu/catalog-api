@@ -4,12 +4,13 @@ Answer the user in **Turkish**. Code, tests and docs stay in English unless the 
 (`.gitlab-ci.yml` and script comments are Turkish without diacritics; keep them that way).
 
 ## What this repository is
-A FastAPI catalog service and, more importantly, its 10-job secure delivery chain (`.gitlab-ci.yml`, job names
-in brackets): lint [`lint`] → unit-test [`unit-test`] → gitleaks [`secret-scan`] → Semgrep [`sast`] →
+A FastAPI catalog service and, more importantly, its 12-job secure delivery chain (`.gitlab-ci.yml`, job names
+in brackets): lint [`lint`] → unit-test [`unit-test`] → hadolint [`hadolint`] → Checkov [`checkov-helm`] →
+gitleaks [`secret-scan`] → Semgrep [`sast`] →
 Trivy fs [`sca`] → Kaniko build [`build`] → Trivy image + SBOM [`image-scan`] → cosign sign [`sign`] →
 Helm deploy by digest [`deploy`] → OWASP ZAP [`dast`]. Platform details: `~/securestream` (read its `CLAUDE.md`).
 
-Every branch push runs the first seven jobs (including `build`, which pushes an image to the registry).
+Every branch push runs the first nine jobs (including `build`, which pushes an image to the registry).
 `sign`, `deploy` and `dast` run only on `main`; `main` is also mirrored read-only to GitHub.
 
 ## How to work here
@@ -18,7 +19,9 @@ Every branch push runs the first seven jobs (including `build`, which pushes an 
   requirement gets a test first; never delete or weaken a security test to make CI pass.
 - CI tool images are pinned by digest: change versions only via `scripts/pin-images.sh`.
 - Helm chart: keep non-root, read-only rootfs, dropped capabilities, seccomp, NetworkPolicy with no egress.
-  `helm lint deploy/helm/catalog-api` before committing.
+  `helm lint deploy/helm/catalog-api -f deploy/helm/catalog-api/ci/lint-values.yaml` before committing
+  (the chart renders only with an image digest).
+- Scanner exceptions go to `security/exceptions.yaml` (time-boxed, max 90 days), never inline suppressions.
 - Before pushing, run the checks available locally: the local loop, `helm lint`, and
   `gitleaks git --log-opts=HEAD --redact .`. Semgrep and Trivy are not installed on ss-mgmt; say so instead of
   claiming they passed. After pushing, watch the pipeline to green (command in `~/securestream/CLAUDE.md`).

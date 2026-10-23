@@ -1,0 +1,15 @@
+# Accepted risks and false positives. Every entry is time-boxed (max 90 days) and checked in CI
+# (exceptions-check). Inline suppressions in code or charts are not used.
+# Schema: id, tool, rule, path (glob, relative to the repository), reason, owner, created, expires.
+exceptions:
+  - id: EXC-0001
+    tool: checkov
+    rule: CKV_K8S_21
+    path: deploy/helm/catalog-api/templates/*.yaml
+    reason: >-
+      False positive for this chart. Every template sets metadata.namespace to .Release.Namespace;
+      checkov renders the chart with `helm template` and no namespace, so it sees "default".
+      The deploy job always installs with `-n catalog` (Pod Security restricted, NetworkPolicy).
+    owner: platform-security
+    created: 2026-10-23
+    expires: 2027-01-21

@@ -10,7 +10,7 @@ workload for **[SecureStream](https://github.com/onurcarkcioglu/securestream-inf
 an end-to-end DevSecOps lab built on a single Proxmox server.
 
 The application is intentionally simple. **The point of this repository is the delivery
-chain around it:** every commit passes ten pipeline stages, the image is signed and carries
+chain around it:** every commit passes twelve pipeline jobs, the image is signed and carries
 an SBOM attestation, and the Kubernetes cluster refuses to run anything the pipeline did not sign.
 
 > The source of truth is a self-hosted GitLab; this GitHub repository is a read-only mirror
@@ -26,7 +26,9 @@ flowchart LR
     A --> C[gitleaks<br/>secret scan]
     A --> D[Semgrep<br/>SAST]
     A --> E[Trivy fs<br/>SCA + misconfig]
-    B & C & D & E --> F[Kaniko build<br/>no privileged]
+    A --> M[hadolint<br/>Dockerfile]
+    A --> N[Checkov<br/>Helm chart]
+    B & C & D & E & M & N --> F[Kaniko build<br/>no privileged]
     F --> G[Trivy image<br/>+ CycloneDX SBOM]
     G --> H[cosign sign<br/>+ SBOM attestation]
     H --> I[Helm deploy<br/>by digest]
@@ -40,6 +42,8 @@ flowchart LR
 |---|---|---|---|
 | 1 | lint | ruff (incl. bandit `S` rules) | style errors, `shell=True`, hard-coded secrets |
 | 2 | unit-test | pytest | broken behaviour, missing security headers, input validation |
+| 2a | hadolint | hadolint (SARIF + JSON) | any Dockerfile finding (default threshold) |
+| 2b | checkov-helm | Checkov (`helm`, `kubernetes`) + `scripts/scan-gate.py` | any chart finding without a valid exception in `security/exceptions.yaml` |
 | 3 | secret-scan | gitleaks | any secret in the commit history |
 | 4 | sast | Semgrep (`p/python`, `p/owasp-top-ten`) | blocking code findings |
 | 5 | sca | Trivy fs | HIGH/CRITICAL fixable CVEs, Dockerfile & Helm misconfig |
@@ -49,7 +53,12 @@ flowchart LR
 | 9 | deploy | Helm, image **by digest**, `--atomic` | failed rollout (auto-rollback) |
 | 10 | dast | OWASP ZAP API scan | XSS, SQLi, command/code injection (rules in `zap-rules.tsv`) |
 
-Stages 3–5 run in parallel (`needs: []`) so security feedback does not wait for tests.
+Stages 2a–5 run in parallel (`needs: []`) so security feedback does not wait for tests.
+
+**Exceptions** live in [`security/exceptions.yaml`](security/exceptions.yaml), never as inline
+suppressions: each entry names the tool, rule, path, reason, owner and an expiry date (at most 90 days).
+Checkov runs in report mode and `scripts/scan-gate.py` decides: a finding passes only with a matching,
+unexpired exception, and a report with zero checks fails (a scanner that did not run never looks green).
 
 ## Security controls in this repository
 
@@ -67,7 +76,8 @@ Stages 3–5 run in parallel (`needs: []`) so security feedback does not wait fo
 - Multi-stage build, slim base image passed in by digest, non-root `USER 10001`, `HEALTHCHECK`.
 - Helm chart ([`deploy/helm/catalog-api`](deploy/helm/catalog-api)): read-only root filesystem,
   all capabilities dropped, `allowPrivilegeEscalation: false`, seccomp `RuntimeDefault`,
-  no service-account token mounted, resource limits.
+  no service-account token mounted, resource limits. The chart renders only with an image
+  **digest** (`required` + `sha256:` check; no tag fallback) and `imagePullPolicy: Always`.
 - `NetworkPolicy`: only the ingress controller may reach the pod; the pod has **no egress at all**.
 - The namespace enforces Pod Security `restricted`; the deploy identity is a namespace-scoped
   Role (it cannot read secrets in other namespaces or list nodes).
@@ -79,7 +89,9 @@ Stages 3–5 run in parallel (`needs: []`) so security feedback does not wait fo
   `Server` header — added after ZAP reported them, and locked in by a unit test.
 - `/v1/admin/stats` is protected by an API key that exists only in HashiCorp Vault. External
   Secrets Operator logs in to Vault with a short-lived, audience-bound Kubernetes token (no static
-  credential), and the key is compared with `secrets.compare_digest`.
+  credential). The key is mounted as a read-only file (`/run/secrets/catalog`, not an environment
+  variable), read per request so a rotated key applies without a restart, and compared with
+  `secrets.compare_digest`.
 
 ## Evidence: the gates were tested by breaking them
 
@@ -121,7 +133,9 @@ app/                     FastAPI application
 tests/                   pytest suite (behaviour + security requirements)
 deploy/helm/catalog-api  hardened Helm chart
 scripts/pin-images.sh    resolves CI tool images to digests
-.gitlab-ci.yml           the 10-stage pipeline
+scripts/scan-gate.py     scanner report + exceptions -> pass/fail
+security/exceptions.yaml time-boxed accepted risks and false positives
+.gitlab-ci.yml           the pipeline
 zap-rules.tsv            ZAP rules that fail the pipeline
 cosign.pub               image-signing public key
 ```

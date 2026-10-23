@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # CI arac imajlarini ss-runner'da cekip .gitlab-ci.yml'deki yer tutuculari digest ile degistirir.
+# Yeni imaj: buraya __AD__ ekle, .gitlab-ci.yml'e "__AD__" yaz, betigi calistir (olmayan yer tutucu atlanir).
 set -euo pipefail
 RUNNER=ubuntu@10.10.10.11
 declare -A IMAGES=(
@@ -11,6 +12,8 @@ declare -A IMAGES=(
   [__COSIGN__]="ghcr.io/sigstore/cosign/cosign:v2.6.5-dev"
   [__HELM__]="alpine/helm:3.22.1"
   [__ZAP__]="ghcr.io/zaproxy/zaproxy:stable"
+  [__HADOLINT__]="hadolint/hadolint:v2.15.1-alpine"
+  [__CHECKOV__]="bridgecrew/checkov:3.3.26"
 )
 for key in "${!IMAGES[@]}"; do
   ref="${IMAGES[$key]}"

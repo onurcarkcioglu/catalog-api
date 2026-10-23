@@ -13,3 +13,6 @@ image-digest.txt
 zap-report.html
 zap-report.json
 .claude/settings.local.json
+hadolint.json
+hadolint.sarif
+checkov-helm.json
