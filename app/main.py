@@ -82,10 +82,23 @@ def get_title(title_id: int) -> Title:
     return title
 
 
+API_KEY_FILE_DEFAULT = "/run/secrets/catalog/CATALOG_API_KEY"
+
+
+def _read_api_key() -> str | None:
+    path = os.environ.get("CATALOG_API_KEY_FILE", API_KEY_FILE_DEFAULT)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
 @app.get("/v1/admin/stats")
 def admin_stats(x_api_key: Annotated[str | None, Header()] = None) -> dict[str, int]:
-    # Anahtar Vault'tan External Secrets ile gelir; kodda ya da imajda yok.
-    expected = os.environ.get("CATALOG_API_KEY")
+    # Anahtar Vault'tan External Secrets ile gelir; env yerine dosya olarak baglanir (CKV_K8S_35).
+    # Her istekte okunur: ESO anahtari yenileyince pod yeniden baslatmadan gecerli olur.
+    expected = _read_api_key()
     if not expected:
         raise HTTPException(status_code=503, detail="admin disabled")
     if x_api_key is None or not secrets.compare_digest(x_api_key, expected):

@@ -57,8 +57,10 @@ def test_security_headers():
     assert "max-age=" in r.headers["strict-transport-security"]
 
 
-def test_admin_requires_key(monkeypatch):
-    monkeypatch.setenv("CATALOG_API_KEY", "unit-test-only")
+def test_admin_requires_key(monkeypatch, tmp_path):
+    key_file = tmp_path / "CATALOG_API_KEY"
+    key_file.write_text("unit-test-only\n")
+    monkeypatch.setenv("CATALOG_API_KEY_FILE", str(key_file))
     assert client.get("/v1/admin/stats").status_code == 401
     assert client.get("/v1/admin/stats", headers={"X-API-Key": "wrong"}).status_code == 401
     r = client.get("/v1/admin/stats", headers={"X-API-Key": "unit-test-only"})
@@ -66,6 +68,21 @@ def test_admin_requires_key(monkeypatch):
     assert r.json() == {"titles": 3}
 
 
-def test_admin_disabled_without_key(monkeypatch):
-    monkeypatch.delenv("CATALOG_API_KEY", raising=False)
+def test_admin_disabled_without_key(monkeypatch, tmp_path):
+    monkeypatch.setenv("CATALOG_API_KEY_FILE", str(tmp_path / "missing"))
     assert client.get("/v1/admin/stats").status_code == 503
+
+
+def test_admin_disabled_with_empty_key(monkeypatch, tmp_path):
+    key_file = tmp_path / "CATALOG_API_KEY"
+    key_file.write_text("\n")
+    monkeypatch.setenv("CATALOG_API_KEY_FILE", str(key_file))
+    assert client.get("/v1/admin/stats", headers={"X-API-Key": ""}).status_code == 503
+
+
+def test_admin_key_not_read_from_env(monkeypatch, tmp_path):
+    # The key is mounted as a file (CKV_K8S_35); an env variable alone must not enable admin.
+    monkeypatch.setenv("CATALOG_API_KEY_FILE", str(tmp_path / "missing"))
+    monkeypatch.setenv("CATALOG_API_KEY", "unit-test-only")
+    r = client.get("/v1/admin/stats", headers={"X-API-Key": "unit-test-only"})
+    assert r.status_code == 503
