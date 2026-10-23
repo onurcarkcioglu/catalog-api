@@ -23,6 +23,7 @@ an SBOM attestation, and the Kubernetes cluster refuses to run anything the pipe
 ```mermaid
 flowchart LR
     A[Commit] --> B[lint + unit-test]
+    B --> S[SonarQube<br/>Quality Gate]
     A --> C[gitleaks<br/>secret scan]
     A --> D[Semgrep<br/>SAST]
     A --> E[Trivy fs<br/>SCA + misconfig]
@@ -30,7 +31,7 @@ flowchart LR
     A --> N[Checkov<br/>Helm chart]
     B & C & D & E & M & N --> F[Kaniko build<br/>no privileged]
     F --> G[Trivy image<br/>+ CycloneDX SBOM]
-    G --> H[cosign sign<br/>+ SBOM attestation]
+    G & S --> H[cosign sign<br/>+ SBOM attestation]
     H --> I[Helm deploy<br/>by digest]
     I --> J[OWASP ZAP<br/>DAST]
     J -. all reports .-> R[(DefectDojo<br/>register + SLA)]
@@ -42,10 +43,11 @@ flowchart LR
 | # | Stage | Tool | Blocks the pipeline on |
 |---|---|---|---|
 | 1 | lint | ruff (incl. bandit `S` rules) | style errors, `shell=True`, hard-coded secrets |
-| 2 | unit-test | pytest | broken behaviour, missing security headers, input validation |
+| 2 | unit-test | pytest + pytest-cov (`coverage.xml` for SonarQube and GitLab) | broken behaviour, missing security headers, input validation |
 | 2a | hadolint | hadolint (SARIF + JSON) | any Dockerfile finding (default threshold) |
 | 2b | checkov-helm | Checkov (`helm`, `kubernetes`) + `scripts/scan-gate.py` | any chart finding without a valid exception in `security/exceptions.yaml` |
 | 2c | exceptions-check | `scripts/exceptions-check.py` | invalid schema, duplicate id, lifetime over 90 days, expired exception |
+| 2d | sonarqube | SonarQube Community Build, Quality Gate "SecureStream" (`sonar.qualitygate.wait`) | on new code: any new bug or vulnerability, unreviewed security hotspot, coverage < 70 % (`main` only; `sign` needs it) |
 | 3 | secret-scan | gitleaks | any secret in the commit history |
 | 4 | sast | Semgrep (`p/python`, `p/owasp-top-ten`) | blocking code findings |
 | 5 | sca | Trivy fs | HIGH/CRITICAL fixable CVEs, Dockerfile & Helm misconfig |

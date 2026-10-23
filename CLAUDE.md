@@ -4,14 +4,16 @@ Answer the user in **Turkish**. Code, tests and docs stay in English unless the 
 (`.gitlab-ci.yml` and script comments are Turkish without diacritics; keep them that way).
 
 ## What this repository is
-A FastAPI catalog service and, more importantly, its 12-job secure delivery chain (`.gitlab-ci.yml`, job names
-in brackets): lint [`lint`] → unit-test [`unit-test`] → hadolint [`hadolint`] → Checkov [`checkov-helm`] →
-gitleaks [`secret-scan`] → Semgrep [`sast`] →
-Trivy fs [`sca`] → Kaniko build [`build`] → Trivy image + SBOM [`image-scan`] → cosign sign [`sign`] →
-Helm deploy by digest [`deploy`] → OWASP ZAP [`dast`]. Platform details: `~/securestream` (read its `CLAUDE.md`).
+A FastAPI catalog service and, more importantly, its 15-job secure delivery chain (`.gitlab-ci.yml`, job names
+in brackets): lint [`lint`] → unit-test [`unit-test`] → hadolint [`hadolint`] → exception file [`exceptions-check`] →
+Checkov [`checkov-helm`] → gitleaks [`secret-scan`] → Semgrep [`sast`] → Trivy fs [`sca`] →
+SonarQube Quality Gate [`sonarqube`] → Kaniko build [`build`] → Trivy image + SBOM [`image-scan`] →
+cosign sign [`sign`] → Helm deploy by digest [`deploy`] → OWASP ZAP [`dast`] → DefectDojo [`defectdojo-upload`].
+Platform details: `~/securestream` (read its `CLAUDE.md`).
 
-Every branch push runs the first nine jobs (including `build`, which pushes an image to the registry).
-`sign`, `deploy` and `dast` run only on `main`; `main` is also mirrored read-only to GitHub.
+Every branch push runs ten jobs (all except the five below; `build` pushes an image to the registry).
+`sonarqube`, `sign`, `deploy`, `dast` and `defectdojo-upload` run only on `main` (protected tokens); a red
+Quality Gate stops `sign` and `deploy`. `main` is also mirrored read-only to GitHub.
 
 ## How to work here
 - Local loop: `. .venv/bin/activate && ruff check . && ruff format --check . && pytest -q`.
