@@ -13,7 +13,13 @@
       "Bash(kubectl get secrets*)",
       "Bash(kubectl describe secret*)",
       "Bash(kubectl * -o yaml*)",
-      "Bash(kubectl * -o json*)"
+      "Bash(kubectl * -o json*)",
+      "Bash(git push * --delete*)",
+      "Bash(git push --delete*)",
+      "Bash(git push * -d *)",
+      "Bash(git push -d *)",
+      "Bash(git push * :**)",
+      "Bash(git branch -D *)"
     ],
     "ask": [
       "Bash(git push *)",
