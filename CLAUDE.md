@@ -28,6 +28,8 @@ Every branch push runs the first seven jobs (including `build`, which pushes an 
 ## Security rules — non-negotiable
 1. Never read or print secret values (CI variables, Vault data, kubeconfigs, tokens). The admin API key exists
    only in Vault; tests use a fake key via `monkeypatch`.
+   kubectl reads the kubeconfig itself, so file deny rules do not cover it: never `kubectl get/describe secret`,
+   never `-o yaml` / `-o json`. Use `-o wide` or `-o jsonpath=` for the specific non-secret fields you need.
 2. Never add `allow_failure`, `--exit-code 0`, `--insecure`, `privileged`, or rule exclusions to make a scan pass.
    A finding is fixed, or documented as an accepted risk with a reason — and the user decides that.
    Existing, deliberate exceptions — do not widen them or copy them to other jobs:

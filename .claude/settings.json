@@ -8,7 +8,12 @@
       "Read(*.env)",
       "Bash(git push --force *)",
       "Bash(git push -f *)",
-      "Bash(vault kv get *)"
+      "Bash(vault kv get *)",
+      "Bash(kubectl get secret*)",
+      "Bash(kubectl get secrets*)",
+      "Bash(kubectl describe secret*)",
+      "Bash(kubectl * -o yaml*)",
+      "Bash(kubectl * -o json*)"
     ],
     "ask": [
       "Bash(git push *)",
