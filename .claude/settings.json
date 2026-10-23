@@ -21,7 +21,9 @@
       "Read(/etc/securestream/**)",
       "Bash(*admin.kubeconfig*)",
       "Bash(*--kubeconfig*)",
-      "Bash(*KUBECONFIG=*)"
+      "Bash(*KUBECONFIG=*)",
+      "Bash(kubectl * get secret*)",
+      "Bash(kubectl * describe secret*)"
     ],
     "ask": [
       "Bash(git push *)",
