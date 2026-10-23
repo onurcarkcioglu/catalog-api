@@ -45,8 +45,8 @@ flowchart LR
 | 1 | lint | ruff (incl. bandit `S` rules) | style errors, `shell=True`, hard-coded secrets |
 | 2 | unit-test | pytest + pytest-cov (`coverage.xml` for SonarQube and GitLab) | broken behaviour, missing security headers, input validation |
 | 2a | hadolint | hadolint (SARIF + JSON) | any Dockerfile finding (default threshold) |
-| 2b | checkov-helm | Checkov (`helm`, `kubernetes`) + `scripts/scan-gate.py` | any chart finding without a valid exception in `security/exceptions.yaml` |
-| 2c | exceptions-check | `scripts/exceptions-check.py` | invalid schema, duplicate id, lifetime over 90 days, expired exception |
+| 2b | checkov-helm | Checkov (`helm`, `kubernetes`) + `scan-gate.py` (ci-templates) | any chart finding without a valid exception in `security/exceptions.yaml` |
+| 2c | exceptions-check | `exceptions-check.py` (ci-templates) | invalid schema, duplicate id, lifetime over 90 days, expired exception |
 | 2d | sonarqube | SonarQube Community Build, Quality Gate "SecureStream" (`sonar.qualitygate.wait`) | on new code: any new bug or vulnerability, unreviewed security hotspot, coverage < 70 % (`main` only; `sign` needs it) |
 | 3 | secret-scan | gitleaks | any secret in the commit history |
 | 4 | sast | Semgrep (`p/python`, `p/owasp-top-ten`) | blocking code findings |
@@ -56,20 +56,20 @@ flowchart LR
 | 8 | sign | cosign | — signs the image and attests the SBOM (`main` only) |
 | 9 | deploy | Helm, image **by digest**, `--atomic` | failed rollout (auto-rollback) |
 | 10 | dast | OWASP ZAP API scan | XSS, SQLi, command/code injection (rules in `zap-rules.tsv`) |
-| 11 | defectdojo-upload | DefectDojo reimport (`scripts/defectdojo-upload.py`) | — register, not a gate: all reports of `main` (also after a red job), exceptions mirrored as Risk Acceptances; API errors fail the job |
+| 11 | defectdojo-upload | DefectDojo reimport (`defectdojo-upload.py` (ci-templates)) | — register, not a gate: all reports of `main` (also after a red job), exceptions mirrored as Risk Acceptances; API errors fail the job |
 
 Stages 2a–5 run in parallel (`needs: []`) so security feedback does not wait for tests.
 
 **Exceptions** live in [`security/exceptions.yaml`](security/exceptions.yaml), never as inline
 suppressions: each entry names the tool, rule, path, reason, owner and an expiry date (at most 90 days).
-Checkov runs in report mode and `scripts/scan-gate.py` decides: a finding passes only with a matching,
+Checkov runs in report mode and `scan-gate.py` (ci-templates) decides: a finding passes only with a matching,
 unexpired exception, and a report with zero checks fails (a scanner that did not run never looks green).
 Triage, SLA and who decides on false positives: `docs/vulnerability-management.md` in the platform repository.
 
 ## Security controls in this repository
 
 **Supply chain**
-- Every CI tool image is pinned **by digest**, not tag (`scripts/pin-images.sh`). Motivation:
+- Every CI tool image is pinned **by digest**, not tag (one place for all projects: `templates/images.yml` in `securestream/ci-templates`, updated with its `scripts/pin-images.sh` and a new tag). Motivation:
   the March 2026 Trivy supply-chain compromise (CVE-2026-33634), where malicious releases were
   published under legitimate tags; digest-pinned pipelines were not affected.
 - New tool versions wait roughly two weeks before adoption (cool-down period).
@@ -138,10 +138,8 @@ public Rekor transparency log: the lab registry is private.
 app/                     FastAPI application
 tests/                   pytest suite (behaviour + security requirements)
 deploy/helm/catalog-api  hardened Helm chart
-scripts/pin-images.sh    resolves CI tool images to digests
-scripts/scan-gate.py     scanner report + exceptions -> pass/fail
 security/exceptions.yaml time-boxed accepted risks and false positives
-.gitlab-ci.yml           the pipeline
+.gitlab-ci.yml           the pipeline (shared jobs: securestream/ci-templates, by tag)
 zap-rules.tsv            ZAP rules that fail the pipeline
 cosign.pub               image-signing public key
 ```

@@ -1,6 +1,5 @@
-# catalog-api guvenli pipeline - Sprint 2 / asama 1
-# Arac imajlari digest ile sabit (CVE-2026-33634 Trivy tedarik zinciri saldirisi dersi).
-# Guncellemek icin: scripts/pin-images.sh
+# catalog-api guvenli pipeline. Ortak guvenlik isleri ve tum arac imaj digest'leri securestream/ci-templates'ten
+# (tag ile; SS_CI_REF ayni tag olmali, YAML anchor). Imaj guncelleme: ci-templates scripts/pin-images.sh + yeni tag.
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -10,24 +9,26 @@ workflow:
 
 stages: [test, scan, build, image-scan, sign, deploy, dast, report]
 
+include:
+  - project: securestream/ci-templates
+    ref: &ss_ci_ref v1.0.0-rc.2
+    file:
+      - templates/secret-scan.yml
+      - templates/sast.yml
+      - templates/sca.yml
+      - templates/iac-scan.yml
+      - templates/dockerfile-lint.yml
+      - templates/sonarqube.yml
+      - templates/exceptions-check.yml
+      - templates/defectdojo-upload.yml
+
 variables:
-  PYTHON_IMAGE: "python:3.12-slim@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2"
-  GITLEAKS_IMAGE: "ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f"
-  SEMGREP_IMAGE: "semgrep/semgrep:1.180.0@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3"
-  TRIVY_IMAGE: "aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222"
-  KANIKO_IMAGE: "martizih/kaniko:v1.28.6-debug@sha256:7ab44d0131c3051b6dea128067e258c7afb5c4815082a93b9cf6c624f2140bf0"
-  COSIGN_IMAGE: "ghcr.io/sigstore/cosign/cosign:v2.6.5-dev@sha256:76029a0246bcfde96caa72469a62a1094f6e0978dc3f537f5cafd4c5f6c6a417"
-  HELM_IMAGE: "alpine/helm:3.22.1@sha256:8191701ad1f82ee3695c87211fcbfe6d7b1bb7df92ac1c8de9ccdb0995a6a2c1"
-  HADOLINT_IMAGE: "hadolint/hadolint:v2.15.1-alpine@sha256:a1d49ae1a4e83c1dbad26b8c1ad7588c8bd1e04f4866b34ad3cac50335198552"
-  CHECKOV_IMAGE: "bridgecrew/checkov:3.3.26@sha256:8e63f217cb084f1c1a067326a9cf6e37d54bdc82e5822210d50ca4e2f647dd93"
-  SONAR_SCANNER_IMAGE: "sonarsource/sonar-scanner-cli:12.2.0.4256_8.1.0@sha256:a3f4215076706c95a17a68c19322ee916e40a3acd081a8c1a1e839e0194afa57"
-  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6"
+  SS_CI_REF: *ss_ci_ref
   IMAGE: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.cache/trivy"
-  TRIVY_NO_PROGRESS: "true"
-  DD_URL: "https://defectdojo.securestream.lab"
-  SONAR_HOST_URL: "https://sonar.securestream.lab"
+  CHECKOV_HELM_VALUES: deploy/helm/catalog-api/ci/lint-values.yaml
+  DD_REPORTS: >-
+    gitleaks=gitleaks.json semgrep=semgrep.json trivy-fs=trivy-fs.json trivy-image=trivy-image.json
+    zap=zap-report.xml hadolint=hadolint.json checkov-helm=checkov-helm.json@deploy/helm
 
 default:
   tags: [docker]
@@ -41,14 +42,6 @@ default:
     paths: [.cache/pip]
   before_script:
     - pip install -q -r requirements-dev.txt
-
-.trivy:
-  image:
-    name: $TRIVY_IMAGE
-    entrypoint: [""]
-  cache:
-    key: trivy-db
-    paths: [.cache/trivy]
 
 lint:
   stage: test
@@ -73,116 +66,6 @@ unit-test:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
-
-hadolint:
-  stage: test
-  needs: []
-  image:
-    name: $HADOLINT_IMAGE
-    entrypoint: [""]
-  script:
-    # 1. calisma yalnizca SARIF raporu uretir; karari 2. calisma verir (hadolint'in kendi cikis kodu,
-    # varsayilan esik: her bulgu pipeline'i durdurur).
-    - hadolint --no-fail -f sarif Dockerfile > hadolint.sarif
-    - hadolint -f json Dockerfile > hadolint.json
-  artifacts:
-    when: always
-    paths: [hadolint.json, hadolint.sarif]
-    expire_in: 30 days
-
-exceptions-check:
-  stage: test
-  needs: []
-  image: $PYTHON_IMAGE
-  cache:
-    key:
-      files: [requirements-ci.txt]
-    paths: [.cache/pip]
-  script:
-    # Sema, benzersiz id, en fazla 90 gun; suresi dolmus istisna pipeline'i durdurur.
-    - pip install -q --require-hashes -r requirements-ci.txt
-    - python3 scripts/exceptions-check.py
-
-checkov-helm:
-  stage: scan
-  needs: []
-  image:
-    name: $CHECKOV_IMAGE
-    entrypoint: [""]
-  script:
-    # checkov rapor modunda calisir; karari scan-gate.py verir: security/exceptions.yaml'da suresi
-    # dolmamis bir istisnasi olmayan her bulgu ve hic kontrol yapilmamis rapor pipeline'i durdurur.
-    # Chart digest olmadan render edilmez; ornek digest ci/lint-values.yaml'da.
-    - checkov --framework helm,kubernetes -d deploy/helm --var-file deploy/helm/catalog-api/ci/lint-values.yaml --quiet --soft-fail -o json > checkov-helm.json
-    - python3 scripts/scan-gate.py --tool checkov --report checkov-helm.json --base deploy/helm
-  artifacts:
-    when: always
-    paths: [checkov-helm.json]
-    expire_in: 30 days
-
-secret-scan:
-  stage: scan
-  needs: []
-  image:
-    name: $GITLEAKS_IMAGE
-    entrypoint: [""]
-  variables:
-    GIT_DEPTH: "0"
-    # Temiz klon: runner'da onceki islerden kalan referanslar taramaya karismasin.
-    GIT_STRATEGY: clone
-  script:
-    # Sadece bu commit'ten erisilebilen gecmis taranir (--all yerine).
-    - gitleaks git --log-opts="$CI_COMMIT_SHA" --redact --verbose --report-format json --report-path gitleaks.json .
-  artifacts:
-    when: always
-    paths: [gitleaks.json]
-    expire_in: 30 days
-
-sast:
-  stage: scan
-  needs: []
-  image: $SEMGREP_IMAGE
-  script:
-    - semgrep scan --config p/python --config p/owasp-top-ten --metrics=off --error --json-output=semgrep.json .
-  artifacts:
-    when: always
-    paths: [semgrep.json]
-    expire_in: 30 days
-
-sca:
-  stage: scan
-  needs: []
-  extends: .trivy
-  script:
-    # 1. tam rapor (tum seviyeler) DefectDojo icin; 2. kapi: duzeltmesi olan HIGH/CRITICAL durdurur.
-    - trivy fs --scanners vuln,misconfig --skip-dirs .cache --format json --output trivy-fs.json .
-    - trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --ignore-unfixed --skip-dirs .cache --exit-code 1 .
-  artifacts:
-    when: always
-    paths: [trivy-fs.json]
-    expire_in: 30 days
-
-sonarqube:
-  stage: scan
-  needs: [unit-test]
-  image:
-    name: $SONAR_SCANNER_IMAGE
-    entrypoint: [""]
-  rules:
-    # SONAR_TOKEN protected: yalnizca korumali dalda var. Community Build zaten yalnizca ana dali analiz eder.
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  variables:
-    # Yeni kod = son 30 gunde degisen satirlar (git blame): tam gecmis gerekli
-    GIT_DEPTH: "0"
-    SONAR_USER_HOME: "$CI_PROJECT_DIR/.cache/sonar"
-  cache:
-    key: sonar
-    paths: [.cache/sonar]
-  script:
-    # Kapi: sonar.qualitygate.wait=true (sonar-project.properties); Quality Gate kirmiziysa scanner exit 1.
-    # Truststore yalnizca lab CA'yi icerir (genel bir sir degil, sifresi sabit); TLS dogrulamasi kapatilmaz.
-    - keytool -importcert -noprompt -alias securestream-lab -file "$CI_SERVER_TLS_CA_FILE" -keystore /tmp/lab-ca.p12 -storetype PKCS12 -storepass changeit
-    - sonar-scanner -Dsonar.scanner.truststorePath=/tmp/lab-ca.p12 -Dsonar.scanner.truststorePassword=changeit -Dsonar.scanner.skipJreProvisioning=true -Dsonar.projectVersion="$CI_COMMIT_SHORT_SHA" -Dsonar.scm.revision="$CI_COMMIT_SHA"
 
 build:
   stage: build
@@ -210,7 +93,7 @@ build:
 image-scan:
   stage: image-scan
   needs: [build]
-  extends: .trivy
+  extends: .ss-trivy
   variables:
     TRIVY_USERNAME: $CI_REGISTRY_USER
     TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
@@ -298,36 +181,3 @@ dast:
     when: always
     paths: [zap-report.html, zap-report.json, zap-report.xml]
     expire_in: 30 days
-
-defectdojo-upload:
-  stage: report
-  image: $PYTHON_IMAGE
-  # Kapi degil, kayit: onceki isler kirmizi olsa da calisir. API hatasi isi kirmizi yapar.
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: always
-  needs:
-    - { job: secret-scan, artifacts: true, optional: true }
-    - { job: sast, artifacts: true, optional: true }
-    - { job: sca, artifacts: true, optional: true }
-    - { job: image-scan, artifacts: true, optional: true }
-    - { job: dast, artifacts: true, optional: true }
-    - { job: hadolint, artifacts: true, optional: true }
-    - { job: checkov-helm, artifacts: true, optional: true }
-  cache:
-    key:
-      files: [requirements-ci.txt]
-    paths: [.cache/pip]
-  script:
-    # DD_API_KEY: grup degiskeni (protected + masked + hidden), CI kullanicisi gitlab-ci (staff degil, authorized_users).
-    # Her rapor "CI/CD" engagement'inda kendi test'ine reimport edilir; istisnalar Risk Acceptance olur.
-    - pip install -q --require-hashes -r requirements-ci.txt
-    - >-
-      python3 scripts/defectdojo-upload.py --url "$DD_URL" --product catalog-api
-      --report gitleaks=gitleaks.json
-      --report semgrep=semgrep.json
-      --report trivy-fs=trivy-fs.json
-      --report trivy-image=trivy-image.json
-      --report zap=zap-report.xml
-      --report hadolint=hadolint.json
-      --report checkov-helm=checkov-helm.json@deploy/helm

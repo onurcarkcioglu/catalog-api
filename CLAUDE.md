@@ -4,14 +4,14 @@ Answer the user in **Turkish**. Code, tests and docs stay in English unless the 
 (`.gitlab-ci.yml` and script comments are Turkish without diacritics; keep them that way).
 
 ## What this repository is
-A FastAPI catalog service and, more importantly, its 15-job secure delivery chain (`.gitlab-ci.yml`, job names
+A FastAPI catalog service and, more importantly, its 16-job secure delivery chain (including `ss-tools`, which fetches the shared scripts) (`.gitlab-ci.yml`, job names
 in brackets): lint [`lint`] → unit-test [`unit-test`] → hadolint [`hadolint`] → exception file [`exceptions-check`] →
 Checkov [`checkov-helm`] → gitleaks [`secret-scan`] → Semgrep [`sast`] → Trivy fs [`sca`] →
 SonarQube Quality Gate [`sonarqube`] → Kaniko build [`build`] → Trivy image + SBOM [`image-scan`] →
 cosign sign [`sign`] → Helm deploy by digest [`deploy`] → OWASP ZAP [`dast`] → DefectDojo [`defectdojo-upload`].
 Platform details: `~/securestream` (read its `CLAUDE.md`).
 
-Every branch push runs ten jobs (all except the five below; `build` pushes an image to the registry).
+Every branch push runs eleven jobs (all except the five below; `build` pushes an image to the registry).
 `sonarqube`, `sign`, `deploy`, `dast` and `defectdojo-upload` run only on `main` (protected tokens); a red
 Quality Gate stops `sign` and `deploy`. `main` is also mirrored read-only to GitHub.
 
@@ -19,7 +19,9 @@ Quality Gate stops `sign` and `deploy`. `main` is also mirrored read-only to Git
 - Local loop: `. .venv/bin/activate && ruff check . && ruff format --check . && pytest -q`.
 - Security requirements are written as tests (input validation, security headers, admin auth). A new
   requirement gets a test first; never delete or weaken a security test to make CI pass.
-- CI tool images are pinned by digest: change versions only via `scripts/pin-images.sh`.
+- Shared security jobs, helper scripts and every CI tool image digest come from `securestream/ci-templates` at a
+  **tag** (`include` ref and `SS_CI_REF` are one YAML anchor). Change images or shared jobs there (`scripts/pin-images.sh`,
+  new tag), then raise the tag here. `ss-tools` (`.pre`) fetches the scripts into `.ss-tools/`.
 - Helm chart: keep non-root, read-only rootfs, dropped capabilities, seccomp, NetworkPolicy with no egress.
   `helm lint deploy/helm/catalog-api -f deploy/helm/catalog-api/ci/lint-values.yaml` before committing
   (the chart renders only with an image digest).
