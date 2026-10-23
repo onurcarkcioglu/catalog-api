@@ -14,6 +14,7 @@ declare -A IMAGES=(
   [__ZAP__]="ghcr.io/zaproxy/zaproxy:stable"
   [__HADOLINT__]="hadolint/hadolint:v2.15.1-alpine"
   [__CHECKOV__]="bridgecrew/checkov:3.3.26"
+  [__SONAR_SCANNER__]="sonarsource/sonar-scanner-cli:12.2.0.4256_8.1.0"
 )
 for key in "${!IMAGES[@]}"; do
   ref="${IMAGES[$key]}"

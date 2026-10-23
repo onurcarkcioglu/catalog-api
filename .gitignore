@@ -16,3 +16,6 @@ zap-report.json
 hadolint.json
 hadolint.sarif
 checkov-helm.json
+coverage.xml
+.coverage
+.scannerwork/
