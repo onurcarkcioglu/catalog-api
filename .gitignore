@@ -12,3 +12,4 @@ sbom.cdx.json
 image-digest.txt
 zap-report.html
 zap-report.json
+.claude/settings.local.json

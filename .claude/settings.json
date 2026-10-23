@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(~/.config/securestream/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.kube/**)",
+      "Read(*.env)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(vault kv get *)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(helm upgrade *)",
+      "Bash(kubectl apply *)",
+      "Bash(kubectl delete *)",
+      "Bash(ssh *)",
+      "Bash(sudo *)"
+    ]
+  }
+}
