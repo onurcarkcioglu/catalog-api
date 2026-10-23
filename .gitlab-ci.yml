@@ -11,7 +11,7 @@ stages: [test, scan, build, image-scan, sign, deploy, dast, report]
 
 include:
   - project: securestream/ci-templates
-    ref: &ss_ci_ref v1.0.0
+    ref: &ss_ci_ref v1.1.0
     file:
       - templates/secret-scan.yml
       - templates/sast.yml
@@ -21,6 +21,7 @@ include:
       - templates/sonarqube.yml
       - templates/exceptions-check.yml
       - templates/defectdojo-upload.yml
+      - templates/dependency-track.yml
 
 variables:
   SS_CI_REF: *ss_ci_ref
