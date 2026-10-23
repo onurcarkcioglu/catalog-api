@@ -8,7 +8,7 @@ workflow:
       when: never
     - if: $CI_COMMIT_BRANCH
 
-stages: [test, scan, build, image-scan, sign, deploy, dast]
+stages: [test, scan, build, image-scan, sign, deploy, dast, report]
 
 variables:
   PYTHON_IMAGE: "python:3.12-slim@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2"
@@ -25,6 +25,7 @@ variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.cache/trivy"
   TRIVY_NO_PROGRESS: "true"
+  DD_URL: "https://defectdojo.securestream.lab"
 
 default:
   tags: [docker]
@@ -83,6 +84,19 @@ hadolint:
     paths: [hadolint.json, hadolint.sarif]
     expire_in: 30 days
 
+exceptions-check:
+  stage: test
+  needs: []
+  image: $PYTHON_IMAGE
+  cache:
+    key:
+      files: [requirements-ci.txt]
+    paths: [.cache/pip]
+  script:
+    # Sema, benzersiz id, en fazla 90 gun; suresi dolmus istisna pipeline'i durdurur.
+    - pip install -q --require-hashes -r requirements-ci.txt
+    - python3 scripts/exceptions-check.py
+
 checkov-helm:
   stage: scan
   needs: []
@@ -134,7 +148,13 @@ sca:
   needs: []
   extends: .trivy
   script:
+    # 1. tam rapor (tum seviyeler) DefectDojo icin; 2. kapi: duzeltmesi olan HIGH/CRITICAL durdurur.
+    - trivy fs --scanners vuln,misconfig --skip-dirs .cache --format json --output trivy-fs.json .
     - trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --ignore-unfixed --skip-dirs .cache --exit-code 1 .
+  artifacts:
+    when: always
+    paths: [trivy-fs.json]
+    expire_in: 30 days
 
 build:
   stage: build
@@ -173,10 +193,11 @@ image-scan:
       export SSL_CERT_FILE=/tmp/ca-bundle.pem
       IMAGE_REF="$CI_REGISTRY_IMAGE@$(cat image-digest.txt)"
       trivy image --format cyclonedx --output sbom.cdx.json "$IMAGE_REF"
+      trivy image --format json --output trivy-image.json "$IMAGE_REF"
       trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE_REF"
   artifacts:
     when: always
-    paths: [sbom.cdx.json]
+    paths: [sbom.cdx.json, trivy-image.json]
     expire_in: 90 days
 
 sign:
@@ -243,8 +264,41 @@ dast:
     - |
       rm -rf /zap/wrk && ln -s "$CI_PROJECT_DIR" /zap/wrk
       zap-api-scan.py -t https://catalog.securestream.lab/openapi.json -f openapi \
-        -c zap-rules.tsv -r zap-report.html -J zap-report.json
+        -c zap-rules.tsv -r zap-report.html -J zap-report.json -x zap-report.xml
   artifacts:
     when: always
-    paths: [zap-report.html, zap-report.json]
+    paths: [zap-report.html, zap-report.json, zap-report.xml]
     expire_in: 30 days
+
+defectdojo-upload:
+  stage: report
+  image: $PYTHON_IMAGE
+  # Kapi degil, kayit: onceki isler kirmizi olsa da calisir. API hatasi isi kirmizi yapar.
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: always
+  needs:
+    - { job: secret-scan, artifacts: true, optional: true }
+    - { job: sast, artifacts: true, optional: true }
+    - { job: sca, artifacts: true, optional: true }
+    - { job: image-scan, artifacts: true, optional: true }
+    - { job: dast, artifacts: true, optional: true }
+    - { job: hadolint, artifacts: true, optional: true }
+    - { job: checkov-helm, artifacts: true, optional: true }
+  cache:
+    key:
+      files: [requirements-ci.txt]
+    paths: [.cache/pip]
+  script:
+    # DD_API_KEY: grup degiskeni (protected + masked + hidden), CI kullanicisi gitlab-ci, rol API_Importer.
+    # Her rapor "CI/CD" engagement'inda kendi test'ine reimport edilir; istisnalar Risk Acceptance olur.
+    - pip install -q --require-hashes -r requirements-ci.txt
+    - >-
+      python3 scripts/defectdojo-upload.py --url "$DD_URL" --product catalog-api
+      --report gitleaks=gitleaks.json
+      --report semgrep=semgrep.json
+      --report trivy-fs=trivy-fs.json
+      --report trivy-image=trivy-image.json
+      --report zap=zap-report.xml
+      --report hadolint=hadolint.json
+      --report checkov-helm=checkov-helm.json@deploy/helm
