@@ -55,8 +55,11 @@ def checkov_findings(report: object, base: str) -> tuple[int, list[dict]]:
 
 
 def normalise(path: str, base: str) -> str:
-    # checkov: "/catalog-api/templates/x.yaml" relative to the scanned directory -> repository path
-    return str(Path(base) / path.lstrip("/"))
+    # checkov helm: "/catalog-api/templates/x.yaml" (relative to the scanned directory);
+    # checkov terraform: "/infra/terraform/x/main.tf" (relative to the working directory).
+    rel = path.lstrip("/")
+    base = base.rstrip("/")
+    return rel if rel == base or rel.startswith(base + "/") else str(Path(base) / rel)
 
 
 def main() -> int:
