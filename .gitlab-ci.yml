@@ -132,9 +132,20 @@ sign:
       cosign login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
       cosign sign --yes --key /tmp/cosign.key --tlog-upload=false "$IMAGE_REF"
       cosign attest --yes --key /tmp/cosign.key --tlog-upload=false --type cyclonedx --predicate sbom.cdx.json "$IMAGE_REF"
+      # SLSA v1 build provenance: kaynak commit, ci-templates surumu, base image ve kaniko digest'leri
+      sh ci/slsa-provenance.sh > provenance.json
+      cosign attest --yes --key /tmp/cosign.key --tlog-upload=false --type slsaprovenance1 --predicate provenance.json "$IMAGE_REF"
       rm -f /tmp/cosign.key
-      cosign verify --key cosign.pub --insecure-ignore-tlog=true "$IMAGE_REF" > /dev/null && echo "Imza dogrulandi: $IMAGE_REF"
-      cosign verify-attestation --key cosign.pub --insecure-ignore-tlog=true --type cyclonedx "$IMAGE_REF" > /dev/null && echo "SBOM attestation dogrulandi"
+      # Dogrulamalar ayri komut: "cmd && echo" zincirinde hata set -e'yi tetiklemez, is yesil kalirdi
+      cosign verify --key cosign.pub --insecure-ignore-tlog=true "$IMAGE_REF" > /dev/null
+      echo "Imza dogrulandi: $IMAGE_REF"
+      cosign verify-attestation --key cosign.pub --insecure-ignore-tlog=true --type cyclonedx "$IMAGE_REF" > /dev/null
+      echo "SBOM attestation dogrulandi"
+      cosign verify-attestation --key cosign.pub --insecure-ignore-tlog=true --type slsaprovenance1 "$IMAGE_REF" > /dev/null
+      echo "SLSA provenance dogrulandi"
+  artifacts:
+    paths: [provenance.json]
+    expire_in: 90 days
 
 deploy:
   stage: deploy

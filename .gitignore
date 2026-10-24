@@ -19,3 +19,4 @@ checkov-helm.json
 coverage.xml
 .coverage
 .scannerwork/
+provenance.json
